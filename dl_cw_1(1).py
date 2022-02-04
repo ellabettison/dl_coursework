@@ -32,25 +32,25 @@ For GPU support, go to "Edit" -> "Notebook Settings", and select "Hardware accel
 You will need to install pytorch and other libraries by running the following cell:
 """
 
-!pip install -q otter-grader pandoc torch torchvision sklearn seaborn
+#!pip install -q otter-grader pandoc torch torchvision sklearn seaborn
 
 # Initialization Cell
-import otter
-grader = otter.Notebook("dl_cw_1.ipynb")
+#import otter
+#grader = otter.Notebook("dl_cw_1.ipynb")
 import matplotlib.pyplot as plt # DO NOT use %matplotlib inline in the notebook
 import numpy as np
 rng_seed = 90
 
-ON_COLAB = True
+ON_COLAB = False
 
-!wget https://zenodo.org/record/5846979/files/NaturalImageNetTest.zip?download=1
+#!wget https://zenodo.org/record/5846979/files/NaturalImageNetTest.zip?download=1
 # !wget https://zenodo.org/record/5846979/files/NaturalImageNetTrain.zip?download=1
-if ON_COLAB:
-    !unzip /content/NaturalImageNetTest.zip?download=1 > /dev/null
+#if ON_COLAB:
+#    !unzip /content/NaturalImageNetTest.zip?download=1 > /dev/null
     # !unzip /content/NaturalImageNetTrain.zip?download=1 > /dev/null
-else: 
-    !unzip NaturalImageNetTest.zip?download=1 > /dev/null
-    !unzip NaturalImageNetTrain.zip?download=1 > /dev/null
+#else: 
+#    !unzip NaturalImageNetTest.zip?download=1 > /dev/null
+#    !unzip NaturalImageNetTrain.zip?download=1 > /dev/null
 
 #torch
 import torch
@@ -86,13 +86,14 @@ def define_parser():
     p.add_argument('-d', '--dropout', type=bool, default=False, help='Add dropout layers to network')
     p.add_argument('-n', '--hidden_layers', type=int, default=6, help='Number of hidden layers in network')
     p.add_argument('-s', '--hidden_size', type=int, default=16, help='Base hidden size to use in layers')
+    p.add_argument('-b', '--batch_size', type=int, default=128, help='Batch size')
     return p
 
-# parser = define_parser()
-# a = parser.parse_args()
+parser = define_parser()
+a = parser.parse_args()
 
-# args = Args(apply_augmentation=a.aug, lr=a.lr, dropout=a.dropout, hidden_layers=a.hidden_layers, base_hidden_size=a.hidden_size)
-args = Args()
+args = Args(apply_augmentation=a.aug, lr=a.lr, dropout=a.dropout, hidden_layers=a.hidden_layers, base_hidden_size=a.hidden_size)
+#args = Args()
 
 mean = torch.Tensor([0.485, 0.456, 0.406])
 std = torch.Tensor([0.229, 0.224, 0.225])
@@ -382,7 +383,7 @@ def graph_curve(trainxs, trainys, valxs, valys, final_accuracy):
   plt.xlabel('Training step')
   plt.ylabel('Accuracy')
   plt.legend()
-  fig.savefig("/content/images/aug=%s_lr=%f_dropout=%s_hidden=%d_hsize=%d_batch=%d_acc=%d.png" % (args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, final_accuracy), bbox_inches = 'tight')
+  fig.savefig("images/aug=%s_lr=%f_dropout=%s_hidden=%d_hsize=%d_batch=%d_acc=%d.png" % (args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, final_accuracy), bbox_inches = 'tight')
   plt.show()
 
 USE_GPU = True
@@ -474,11 +475,9 @@ def train_part(model, optimizer, epochs=1):
             if t % print_every == 0:
                 trainxs.append(float(num_correct) / num_samples)
                 trainys.append(steps)
-                print('Epoch: %d, Iteration %d, loss = %.4f' % (e, t, loss.item()))
+                #print('Epoch: %d, Iteration %d, loss = %.4f' % (e, t, loss.item()))
                 num_correct=0
                 num_samples=0
-            if t==20:
-                break
         val_acc = check_accuracy(loader_val, model)
         valxs.append(val_acc)
         valys.append(steps)
@@ -491,7 +490,7 @@ optimizer = optim.Adamax(model.parameters(), lr=args.lr, weight_decay=1e-7)
 params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print("Total number of parameters is: {}".format(params))
 
-train_part(model, optimizer, epochs = 2)
+train_part(model, optimizer, epochs = 10)
 
 
 # report test set accuracy
