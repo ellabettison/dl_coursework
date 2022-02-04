@@ -92,8 +92,8 @@ def define_parser():
 parser = define_parser()
 a = parser.parse_args()
 
-args = Args(apply_augmentation=a.aug, lr=a.lr, dropout=a.dropout, hidden_layers=a.hidden_layers, base_hidden_size=a.hidden_size)
-#args = Args()
+args = Args(apply_augmentation=a.aug, lr=a.lr, dropout=a.dropout, hidden_layers=a.hidden_layers, base_hidden_size=a.hidden_size, batch_size=a.batch_size)
+# args = Args()
 
 mean = torch.Tensor([0.485, 0.456, 0.406])
 std = torch.Tensor([0.229, 0.224, 0.225])
@@ -374,16 +374,17 @@ def incorrect_preds(preds, y, test_img):
 
 import matplotlib.pyplot as plt
 
-def graph_curve(trainxs, trainys, valxs, valys, final_accuracy):
+def graph_curve(trainxs, trainys, valxs, valys, model):
   fig = plt.figure()
+  test_acc = check_accuracy(loader_test, model, analysis=True)
   plt.plot(trainys, trainxs, label='Train data')
   plt.plot(valys, valxs, label='Validation data')
-  title = 'Use data augmentation = %s\nLearning rate = %f\nUse dropout = %s\nNumber of hidden layers = %d\nBase size of hidden layers = %d\nBatch size = %d\nFinal validation accuracy = %.d'%(args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, final_accuracy)
+  title = 'Use data augmentation = %s\nLearning rate = %f\nUse dropout = %s\nNumber of hidden layers = %d\nBase size of hidden layers = %d\nBatch size = %d\nFinal test accuracy = %.3f'%(args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, test_acc)
   plt.title(title)
   plt.xlabel('Training step')
   plt.ylabel('Accuracy')
   plt.legend()
-  fig.savefig("images/aug=%s_lr=%f_dropout=%s_hidden=%d_hsize=%d_batch=%d_acc=%d.png" % (args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, final_accuracy), bbox_inches = 'tight')
+  fig.savefig("images/aug=%s_lr=%f_dropout=%s_hidden=%d_hsize=%d_batch=%d_acc=%.3f.png" % (args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, test_acc), bbox_inches = 'tight')
   plt.show()
 
 USE_GPU = True
@@ -481,7 +482,7 @@ def train_part(model, optimizer, epochs=1):
         val_acc = check_accuracy(loader_val, model)
         valxs.append(val_acc)
         valys.append(steps)
-    graph_curve(trainxs, trainys, valxs, valys, valxs[-1]*100)
+    graph_curve(trainxs, trainys, valxs, valys, model)
 
 # define and train the network
 model = MyResNet()
