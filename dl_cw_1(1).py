@@ -254,7 +254,7 @@ class ResidualBlock(nn.Module):
         out = self.left(x) 
 
         if self.dropout:
-            out = Dropout(0.2)(x)
+            out = Dropout(0.2)(out)
         
         out += self.shortcut(x) 
         
@@ -296,7 +296,7 @@ class ResNet(nn.Module):
 
         self.all_layers = nn.Sequential(*all_layers)
         # self.fc = nn.Linear(512, num_classes)
-        self.fc = nn.Linear(args.base_hidden_size * (2**args.hidden_layers), num_classes)
+        self.fc = nn.Linear(args.base_hidden_size * (2**(args.hidden_layers-1)), num_classes)
         
     
     def make_layer(self, block, channels, num_blocks, stride, dropout=False):
