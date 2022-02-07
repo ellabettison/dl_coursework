@@ -71,13 +71,15 @@ rng_seed = 90
 torch.manual_seed(rng_seed)
 
 class Args():
-    def __init__(self, apply_augmentation=False, lr=0.0001, dropout=False, hidden_layers=6, base_hidden_size=16, batch_size=128):
+    def __init__(self, apply_augmentation=False, lr=0.0001, dropout=False, hidden_layers=6, base_hidden_size=16, batch_size=128, gamma=0.79433, use_scheduler=False):
         self.apply_augmentation = apply_augmentation
         self.lr = lr
         self.dropout = dropout
         self.hidden_layers = hidden_layers
         self.base_hidden_size = base_hidden_size
         self.batch_size = batch_size
+        self.gamma = gamma
+        self.use_scheduler = use_scheduler
 
 def define_parser():
     p = argparse.ArgumentParser()
@@ -87,14 +89,17 @@ def define_parser():
     p.add_argument('-n', '--hidden_layers', type=int, default=6, help='Number of hidden layers in network')
     p.add_argument('-s', '--hidden_size', type=int, default=16, help='Base hidden size to use in layers')
     p.add_argument('-b', '--batch_size', type=int, default=128, help='Batch size')
+    p.add_argument('-g', '--gamma', type=float, default=0.79433 , help='Gamma for lr exponential decay')
+    p.add_argument('-e', '--use_scheduler', type=bool, default=False, help='Use lr decay')
     return p
 
 parser = define_parser()
 a = parser.parse_args()
 
-args = Args(apply_augmentation=a.aug, lr=a.lr, dropout=a.dropout, hidden_layers=a.hidden_layers, base_hidden_size=a.hidden_size, batch_size=a.batch_size)
+print(a.aug, a.lr, a.dropout, a.hidden_layers, a.hidden_size, a.batch_size, a.gamma, a.use_scheduler)
+args = Args(apply_augmentation=a.aug, lr=a.lr, dropout=a.dropout, hidden_layers=a.hidden_layers, base_hidden_size=16, batch_size=a.batch_size, gamma=a.gamma, use_scheduler=a.use_scheduler)
 # args = Args()
-
+print("args: ", args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, args.gamma, args.use_scheduler)
 mean = torch.Tensor([0.485, 0.456, 0.406])
 std = torch.Tensor([0.229, 0.224, 0.225])
 
@@ -254,7 +259,7 @@ class ResidualBlock(nn.Module):
         out = self.left(x) 
 
         if self.dropout:
-            out = Dropout(0.2)(out)
+            out = Dropout(0.4)(out)
         
         out += self.shortcut(x) 
         
@@ -274,29 +279,37 @@ class ResNet(nn.Module):
         
         self.inchannel = 16
 
-        all_layers = []
-
-        all_layers.append(nn.Sequential(Conv2d(3, 16, kernel_size = 3, stride = 1,
+        self.conv1 = (nn.Sequential(Conv2d(3, args.base_hidden_size, kernel_size = 3, stride = 1,
                                             padding = 1, bias = False), 
-                                  nn.BatchNorm2d(16), 
+                                  nn.BatchNorm2d(args.base_hidden_size), 
                                   nn.ReLU()))
 
-        for i in range(args.hidden_layers):
-            all_layers.append(self.make_layer(ResidualBlock, args.base_hidden_size * (2**i), 2, stride=2, dropout=args.dropout))
+        #for i in range(args.hidden_layers):
+        #    all_layers.append(self.make_layer(ResidualBlock, args.base_hidden_size * (2**i), 2, stride=2, dropout=args.dropout))
         
-        # self.layer1 = self.make_layer(ResidualBlock, 16, 2, stride = 2)
-        # self.layer2 = self.make_layer(ResidualBlock, 32, 2, stride = 2)
-        # self.layer3 = self.make_layer(ResidualBlock, 64, 2, stride = 2)
-        # self.layer4 = self.make_layer(ResidualBlock, 128, 2, stride = 2)
-        # self.layer5 = self.make_layer(ResidualBlock, 256, 2, stride = 2)
-        # self.layer6 = self.make_layer(ResidualBlock, 512, 2, stride = 2)
+        self.layer1 = self.make_layer(ResidualBlock, 16, 2, stride = 2)
+        self.layer2 = self.make_layer(ResidualBlock, 16, 2, stride = 1)
 
+        self.layer3 = self.make_layer(ResidualBlock, 32, 2, stride = 2)
+        self.layer4 = self.make_layer(ResidualBlock, 32, 2, stride = 1)
+        
+        self.layer5 = self.make_layer(ResidualBlock, 64, 2, stride = 2)
+        self.layer6 = self.make_layer(ResidualBlock, 64, 2, stride = 1)
 
-        all_layers.append(MaxPool2d(4))
+        self.layer7 = self.make_layer(ResidualBlock, 128, 2, stride = 2)
+        self.layer8 = self.make_layer(ResidualBlock, 128, 2, stride = 1)
+        
+        self.layer9 = self.make_layer(ResidualBlock, 256, 2, stride = 2)
+        self.layer10 = self.make_layer(ResidualBlock, 256, 2, stride = 1)
+        
+        self.layer11 = self.make_layer(ResidualBlock, 512, 2, stride = 2)
+        self.layer12 = self.make_layer(ResidualBlock, 512, 2, stride = 1)
 
-        self.all_layers = nn.Sequential(*all_layers)
+        self.maxpool = MaxPool2d(4)
+
+        #self.all_layers = nn.Sequential(*all_layers)
         # self.fc = nn.Linear(512, num_classes)
-        self.fc = nn.Linear(args.base_hidden_size * (2**(args.hidden_layers-1)), num_classes)
+        self.fc = nn.Linear(512 , num_classes)
         
     
     def make_layer(self, block, channels, num_blocks, stride, dropout=False):
@@ -316,15 +329,25 @@ class ResNet(nn.Module):
     
     def forward(self, x):
         
-        # x = self.conv1(x)
-        # x = self.layer1(x)
-        # x = self.layer2(x)
-        # x = self.layer3(x)
-        # x = self.layer4(x)
-        # x = self.layer5(x)
-        # x = self.layer6(x)
-        # x = self.maxpool(x)
-        x = self.all_layers(x)
+        x = self.conv1(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.layer5(x)
+        x = self.layer6(x)
+
+        x = self.layer7(x)
+        x = self.layer8(x)
+
+        x = self.layer9(x)
+        x = self.layer10(x)
+
+        x = self.layer11(x)
+        x = self.layer12(x)
+
+        x = self.maxpool(x)
+        #x = self.all_layers(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
@@ -379,14 +402,15 @@ def graph_curve(trainxs, trainys, valxs, valys, model):
   fig = plt.figure()
   test_acc = check_accuracy(loader_test, model, analysis=True)
   plt.plot(trainys, trainxs, label='Train data')
+  print(trainxs, trainys, valxs, valys)
   plt.plot(valys, valxs, label='Validation data')
-  title = 'Use data augmentation = %s\nLearning rate = %f\nUse dropout = %s\nNumber of hidden layers = %d\nBase size of hidden layers = %d\nBatch size = %d\nFinal test accuracy = %.3f'%(args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, test_acc)
+  title = 'Use data augmentation = %s\nLearning rate = %f\nUse dropout = %s\nNumber of hidden layers = %d\nBase size of hidden layers = %d\nBatch size = %d\nUse lr scheduling = %s\nFinal test accuracy = %.3f'%(args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, args.use_scheduler, test_acc)
   plt.title(title)
   plt.xlabel('Training step')
   plt.ylabel('Accuracy')
   plt.legend()
-  fig.savefig("images/aug=%s_lr=%f_dropout=%s_hidden=%d_hsize=%d_batch=%d_acc=%.3f.png" % (args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, test_acc), bbox_inches = 'tight')
-  plt.show()
+  fig.savefig("images/aug=%s_lr=%f_dropout=%s_hidden=%d_hsize=%d_batch=%d_schedule=%s_acc=%.3f.png" % (args.apply_augmentation, args.lr, args.dropout, args.hidden_layers, args.base_hidden_size, args.batch_size, args.use_scheduler, test_acc), bbox_inches = 'tight')
+  #plt.show()
 
 USE_GPU = True
 dtype = torch.float32 
@@ -425,8 +449,8 @@ def check_accuracy(loader, model, analysis=False):
         print('Got %d / %d correct of val set (%.2f)' % (num_correct, num_samples, 100 * acc))
         if analysis:
           print('check acc', type(stack_predicts), type(stack_labels))
-          confusion(stack_predicts, stack_labels)
-          incorrect_preds(preds, y, x)
+         # confusion(stack_predicts, stack_labels)
+          #incorrect_preds(preds, y, x)
         return float(acc)
 
         
@@ -483,16 +507,20 @@ def train_part(model, optimizer, epochs=1):
         val_acc = check_accuracy(loader_val, model)
         valxs.append(val_acc)
         valys.append(steps)
+        if args.use_scheduler:
+            scheduler.step()
     graph_curve(trainxs, trainys, valxs, valys, model)
 
 # define and train the network
 model = MyResNet()
 optimizer = optim.Adamax(model.parameters(), lr=args.lr, weight_decay=1e-7) 
+if args.use_scheduler:
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, args.gamma, verbose = True)
 
 params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print("Total number of parameters is: {}".format(params))
 
-train_part(model, optimizer, epochs = 10)
+train_part(model, optimizer, epochs = 20)
 
 
 # report test set accuracy
